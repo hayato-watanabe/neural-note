@@ -1,0 +1,41 @@
+# 依存関係
+node_modules/
+package-lock.json
+yarn.lock
+
+# ビルド成果物
+dist/
+build/
+out/
+.next/
+
+# 環境変数
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ログ
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# エディタとIDEの設定
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# テスト関連
+coverage/
+
+# その他
+.cache/
+.temp/
+.tmp/
+.DS_Store
+Thumbs.db
