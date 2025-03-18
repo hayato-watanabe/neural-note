@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マインドマップツール</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Matter.jsを物理エンジンとして使用 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <!-- D3.jsをビジュアライゼーションに使用 -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>マインドマップツール</h1>
+            <div class="controls">
+                <button id="undo-btn" disabled>元に戻す</button>
+                <button id="redo-btn" disabled>やり直す</button>
+                <button id="save-btn">保存</button>
+                <button id="load-btn">読み込み</button>
+                <button id="free-float-btn">自由泳動</button>
+                <input type="file" id="file-input" style="display: none;">
+            </div>
+        </div>
+        <div class="content">
+            <div id="mindmap-container"></div>
+            <div id="node-editor" class="hidden">
+                <h3>ノード編集</h3>
+                <div class="form-group">
+                    <label for="node-title">タイトル（最大20文字）:</label>
+                    <input type="text" id="node-title" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label for="node-content">内容:</label>
+                    <textarea id="node-content"></textarea>
+                </div>
+                <button id="apply-btn">適用</button>
+            </div>
+        </div>
+        <div class="footer">
+            <p>操作方法: クリックで選択、ダブルクリックで編集、Tabキーで子ノード追加、Deleteキーで削除</p>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
