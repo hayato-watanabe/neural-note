@@ -609,4 +609,422 @@ function applyNodeEdit() {
 function addToHistory(action) {
     // 現在の履歴インデックス以降の履歴を削除
     if (currentHistoryIndex < actionHistory.length - 1) {
-        actionHistory = act<response clipped><NOTE>To save on context only part of this file has been shown to you. You should retry this tool after you have searched inside the file with `grep -n` in order to find the line numbers of what you are looking for.</NOTE>
+        actionHistory = actionHistory.slice(0, currentHistoryIndex + 1);
+    }
+    
+    // 履歴が10個を超える場合、最も古い履歴を削除
+    if (actionHistory.length >= 10) {
+        actionHistory.shift();
+    } else {
+        currentHistoryIndex++;
+    }
+    
+    // 新しいアクションを追加
+    actionHistory.push(action);
+    
+    // ボタンの状態を更新
+    updateHistoryButtons();
+}
+
+// 履歴ボタンの状態を更新
+function updateHistoryButtons() {
+    document.getElementById('undo-btn').disabled = currentHistoryIndex < 0;
+    document.getElementById('redo-btn').disabled = currentHistoryIndex >= actionHistory.length - 1;
+}
+
+// 元に戻す
+function undo() {
+    if (currentHistoryIndex < 0) return;
+    
+    const action = actionHistory[currentHistoryIndex];
+    
+    switch (action.type) {
+        case 'add':
+            // ノードとリンクを削除
+            const nodeToRemove = nodes.find(n => n.id === action.node.id);
+            const linkToRemove = links.find(l => l.id === action.link.id);
+            
+            if (nodeToRemove) {
+                Matter.Composite.remove(world, nodeToRemove.body);
+                nodes = nodes.filter(n => n.id !== nodeToRemove.id);
+            }
+            
+            if (linkToRemove && linkToRemove.constraint) {
+                Matter.Composite.remove(world, linkToRemove.constraint);
+                links = links.filter(l => l.id !== linkToRemove.id);
+            }
+            break;
+            
+        case 'delete':
+            // ノードとリンクを復元
+            action.nodes.forEach(node => {
+                const restoredNode = createNode(node.title, node.type, node.parentId);
+                restoredNode.id = node.id;
+                restoredNode.x = node.x;
+                restoredNode.y = node.y;
+                restoredNode.color = node.color;
+                restoredNode.content = node.content;
+                
+                addNode(restoredNode);
+            });
+            
+            action.links.forEach(link => {
+                createLink(link.source, link.target);
+            });
+            break;
+            
+        case 'edit':
+            // ノードの内容を元に戻す
+            const nodeToEdit = nodes.find(n => n.id === action.nodeId);
+            if (nodeToEdit) {
+                nodeToEdit.title = action.oldValues.title;
+                nodeToEdit.content = action.oldValues.content;
+            }
+            break;
+            
+        case 'move':
+            // ノードの位置を元に戻す
+            const nodeToMove = nodes.find(n => n.id === action.nodeId);
+            if (nodeToMove && nodeToMove.body) {
+                // 前の位置情報がない場合は何もしない
+                if (action.oldPosition) {
+                    Matter.Body.setPosition(nodeToMove.body, action.oldPosition);
+                    nodeToMove.x = action.oldPosition.x;
+                    nodeToMove.y = action.oldPosition.y;
+                }
+            }
+            break;
+            
+        case 'init':
+            // 初期状態に戻す（全て削除して再作成）
+            nodes.forEach(node => {
+                Matter.Composite.remove(world, node.body);
+            });
+            
+            links.forEach(link => {
+                if (link.constraint) {
+                    Matter.Composite.remove(world, link.constraint);
+                }
+            });
+            
+            nodes = [];
+            links = [];
+            
+            // 前の状態を復元
+            if (currentHistoryIndex > 0) {
+                const prevState = actionHistory[currentHistoryIndex - 1];
+                if (prevState.type === 'init') {
+                    prevState.nodes.forEach(node => {
+                        const restoredNode = createNode(node.title, node.type, node.parentId);
+                        restoredNode.id = node.id;
+                        restoredNode.x = node.x;
+                        restoredNode.y = node.y;
+                        restoredNode.color = node.color;
+                        restoredNode.content = node.content;
+                        
+                        addNode(restoredNode);
+                    });
+                    
+                    prevState.links.forEach(link => {
+                        createLink(link.source, link.target);
+                    });
+                }
+            }
+            break;
+    }
+    
+    // 履歴インデックスを減らす
+    currentHistoryIndex--;
+    
+    // 選択を解除
+    selectedNode = null;
+    editingNode = null;
+    
+    // エディタを非表示
+    hideNodeEditor();
+    
+    // ボタンの状態を更新
+    updateHistoryButtons();
+    
+    // 描画を更新
+    updateMindMap();
+}
+
+// やり直し
+function redo() {
+    if (currentHistoryIndex >= actionHistory.length - 1) return;
+    
+    // 履歴インデックスを増やす
+    currentHistoryIndex++;
+    
+    const action = actionHistory[currentHistoryIndex];
+    
+    switch (action.type) {
+        case 'add':
+            // ノードとリンクを追加
+            const childNode = createNode(action.node.title, action.node.type, action.node.parentId);
+            childNode.id = action.node.id;
+            childNode.x = action.node.x;
+            childNode.y = action.node.y;
+            childNode.color = action.node.color;
+            childNode.content = action.node.content;
+            
+            addNode(childNode);
+            createLink(action.node.parentId, childNode.id);
+            break;
+            
+        case 'delete':
+            // ノードとリンクを削除
+            action.nodes.forEach(node => {
+                const nodeToRemove = nodes.find(n => n.id === node.id);
+                if (nodeToRemove) {
+                    Matter.Composite.remove(world, nodeToRemove.body);
+                    nodes = nodes.filter(n => n.id !== nodeToRemove.id);
+                }
+            });
+            
+            action.links.forEach(link => {
+                const linkToRemove = links.find(l => l.id === link.id);
+                if (linkToRemove && linkToRemove.constraint) {
+                    Matter.Composite.remove(world, linkToRemove.constraint);
+                    links = links.filter(l => l.id !== linkToRemove.id);
+                }
+            });
+            break;
+            
+        case 'edit':
+            // ノードの内容を更新
+            const nodeToEdit = nodes.find(n => n.id === action.nodeId);
+            if (nodeToEdit) {
+                nodeToEdit.title = action.newValues.title;
+                nodeToEdit.content = action.newValues.content;
+            }
+            break;
+            
+        case 'move':
+            // ノードの位置を更新
+            const nodeToMove = nodes.find(n => n.id === action.nodeId);
+            if (nodeToMove && nodeToMove.body) {
+                Matter.Body.setPosition(nodeToMove.body, action.position);
+                nodeToMove.x = action.position.x;
+                nodeToMove.y = action.position.y;
+            }
+            break;
+            
+        case 'init':
+            // 初期状態に戻す
+            nodes.forEach(node => {
+                Matter.Composite.remove(world, node.body);
+            });
+            
+            links.forEach(link => {
+                if (link.constraint) {
+                    Matter.Composite.remove(world, link.constraint);
+                }
+            });
+            
+            nodes = [];
+            links = [];
+            
+            // 新しい状態を適用
+            action.nodes.forEach(node => {
+                const restoredNode = createNode(node.title, node.type, node.parentId);
+                restoredNode.id = node.id;
+                restoredNode.x = node.x;
+                restoredNode.y = node.y;
+                restoredNode.color = node.color;
+                restoredNode.content = node.content;
+                
+                addNode(restoredNode);
+            });
+            
+            action.links.forEach(link => {
+                createLink(link.source, link.target);
+            });
+            break;
+    }
+    
+    // 選択を解除
+    selectedNode = null;
+    editingNode = null;
+    
+    // エディタを非表示
+    hideNodeEditor();
+    
+    // ボタンの状態を更新
+    updateHistoryButtons();
+    
+    // 描画を更新
+    updateMindMap();
+}
+
+// JSONとして保存
+function saveToJson() {
+    // ノードとリンクのデータを準備
+    const data = {
+        nodes: nodes.map(node => ({
+            id: node.id,
+            title: node.title,
+            content: node.content,
+            type: node.type,
+            parentId: node.parentId,
+            x: node.x,
+            y: node.y,
+            color: node.color
+        })),
+        links: links.map(link => ({
+            id: link.id,
+            source: link.source,
+            target: link.target
+        }))
+    };
+    
+    // JSONに変換
+    const jsonString = JSON.stringify(data, null, 2);
+    
+    // ダウンロードリンクを作成
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mindmap.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// JSONから読み込み
+function loadFromJson(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            
+            // 現在の状態を保存
+            const oldNodes = JSON.parse(JSON.stringify(nodes));
+            const oldLinks = JSON.parse(JSON.stringify(links));
+            
+            // 全てのノードとリンクを削除
+            nodes.forEach(node => {
+                Matter.Composite.remove(world, node.body);
+            });
+            
+            links.forEach(link => {
+                if (link.constraint) {
+                    Matter.Composite.remove(world, link.constraint);
+                }
+            });
+            
+            nodes = [];
+            links = [];
+            
+            // 新しいノードを作成
+            data.nodes.forEach(nodeData => {
+                const node = createNode(nodeData.title, nodeData.type, nodeData.parentId);
+                node.id = nodeData.id;
+                node.x = nodeData.x;
+                node.y = nodeData.y;
+                node.color = nodeData.color;
+                node.content = nodeData.content;
+                
+                addNode(node);
+            });
+            
+            // 新しいリンクを作成
+            data.links.forEach(linkData => {
+                createLink(linkData.source, linkData.target);
+            });
+            
+            // アクション履歴に追加
+            addToHistory({
+                type: 'init',
+                nodes: JSON.parse(JSON.stringify(data.nodes)),
+                links: JSON.parse(JSON.stringify(data.links)),
+                oldNodes,
+                oldLinks
+            });
+            
+            // 選択を解除
+            selectedNode = null;
+            editingNode = null;
+            
+            // エディタを非表示
+            hideNodeEditor();
+            
+            // 描画を更新
+            updateMindMap();
+            
+        } catch (error) {
+            console.error('JSONの解析に失敗しました:', error);
+            alert('ファイルの読み込みに失敗しました。有効なJSONファイルを選択してください。');
+        }
+    };
+    
+    reader.readAsText(file);
+    
+    // ファイル入力をリセット
+    event.target.value = '';
+}
+
+// 自由泳動モードの切り替え
+function toggleFreeFloat() {
+    isFreeFLoating = !isFreeFLoating;
+    
+    if (isFreeFLoating) {
+        // 自由泳動モードを有効化
+        document.getElementById('free-float-btn').textContent = '自由泳動停止';
+        
+        // 選択中のノードがあれば選択を解除
+        if (selectedNode) {
+            selectedNode = null;
+            editingNode = null;
+            
+            // エディタを非表示
+            hideNodeEditor();
+            
+            // 描画を更新
+            updateMindMap();
+        }
+        
+        // ランダムな力を加える間隔を設定
+        freeFloatInterval = setInterval(() => {
+            nodes.forEach(node => {
+                // ランダムな力を加える
+                const force = {
+                    x: (Math.random() - 0.5) * 0.5,
+                    y: (Math.random() - 0.5) * 0.5
+                };
+                
+                Matter.Body.applyForce(node.body, node.body.position, force);
+            });
+        }, 1000);
+    } else {
+        // 自由泳動モードを無効化
+        document.getElementById('free-float-btn').textContent = '自由泳動';
+        
+        // 間隔をクリア
+        clearInterval(freeFloatInterval);
+        
+        // 全てのノードの速度を減衰
+        nodes.forEach(node => {
+            Matter.Body.setVelocity(node.body, {
+                x: node.body.velocity.x * 0.5,
+                y: node.body.velocity.y * 0.5
+            });
+        });
+    }
+}
+
+// ウィンドウサイズ変更時の処理
+function updateMindMapSize() {
+    const svg = d3.select('#mindmap-container svg');
+    const container = document.getElementById('mindmap-container');
+    
+    svg.attr('width', container.clientWidth)
+       .attr('height', container.clientHeight);
+}
